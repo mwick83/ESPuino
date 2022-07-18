@@ -32,6 +32,12 @@
 extern unsigned long Rfid_LastRfidCheckTimestamp;
 
 #ifdef RFID_READER_TYPE_PN5180
+    #if !defined(SINGLE_SPI_ENABLE)
+        SPIClass spiRFID(VSPI);
+    #else
+        #error SINGLE_SPI_ENABLE and RFID_READER_TYPE_PN5180 is not supported
+    #endif
+
     static void Rfid_Task(void *parameter);
     static TaskHandle_t rfidTaskHandle;
 
@@ -81,8 +87,9 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
     }
 
     void Rfid_Task(void *parameter) {
-        static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST);
-        static PN5180ISO15693 nfc15693(RFID_CS, RFID_BUSY, RFID_RST);
+        spiRFID.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
+        static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST, spiRFID);
+        static PN5180ISO15693 nfc15693(RFID_CS, RFID_BUSY, RFID_RST, spiRFID);
         uint32_t lastTimeDetected14443 = 0;
         uint32_t lastTimeDetected15693 = 0;
         #ifdef PAUSE_WHEN_RFID_REMOVED
@@ -293,7 +300,7 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
     void Rfid_EnableLpcd(void) {
         // goto low power card detection mode
         #ifdef PN5180_ENABLE_LPCD
-            static PN5180 nfc(RFID_CS, RFID_BUSY, RFID_RST);
+            static PN5180 nfc(RFID_CS, RFID_BUSY, RFID_RST, spiRFID);
             nfc.begin();
             // show PN5180 reader version
             uint8_t firmwareVersion[2];
@@ -345,7 +352,8 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
             #if (RFID_IRQ >= 0 && RFID_IRQ <= 39)
                 pinMode(RFID_IRQ, INPUT);
             #endif
-            static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST);
+            spiRFID.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
+            static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST, spiRFID);
             nfc14443.begin();
             nfc14443.reset();
             // enable RF field
