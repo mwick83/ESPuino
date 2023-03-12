@@ -1,10 +1,8 @@
-#ifndef __ESPUINO_SETTINGS_H__
-    #define __ESPUINO_SETTINGS_H__
+#ifndef __ESPUINO_SETTINGS_OVERRIDE_H__
+    #define __ESPUINO_SETTINGS_OVERRIDE_H__
         #include "Arduino.h"
         #include "values.h"
-#if __has_include("settings-override.h")
-    #include "settings-override.h"
-#else
+
     //######################### INFOS ####################################
     // This is the general configfile for ESPuino-configuration.
 
@@ -19,10 +17,12 @@
     6: ESPuino complete                     => settings-complete.h
     7: Lolin D32 pro SDMMC Port-Expander    => settings-lolin_d32_pro_sdmmc_pe.h
     8: AZDelivery ESP32 NodeMCU             => settings-azdelivery_sdmmc.h
+    9: Lolin D32 SDMMC Port-Expander        => settings-lolin_d32_sdmmc_pe.h
+    10: RASPIAUDIO Muse Proto               => settings-muse_proto.h
     99: custom                              => settings-custom.h
     more to come...
     */
-    #ifndef HAL             // Will be set by platformio.ini. If using Arduini-IDE you have to set HAL according your needs!
+    #ifndef HAL             // Will be set by platformio.ini. If using Arduino-IDE you have to set HAL according your needs!
         #define HAL 1       // HAL 1 = LoLin32, 2 = ESP32-A1S-AudioKit, 3 = Lolin D32, 4 = Lolin D32 pro; ... 99 = custom
     #endif
 
@@ -41,7 +41,8 @@
     #define PLAY_MONO_SPEAKER               // If only one speaker is used enabling mono should make sense. Please note: headphones is always stereo (if HEADPHONE_ADJUST_ENABLE is active)
     #define SHUTDOWN_IF_SD_BOOT_FAILS       // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
     #define MEASURE_BATTERY_VOLTAGE         // Enables battery-measurement via GPIO (ADC) and voltage-divider
-    //#define SHUTDOWN_ON_BAT_CRITICAL      // Whether to turn off on critical battery-level (only used if MEASURE_BATTERY_VOLTAGE is active)
+    //#define MEASURE_BATTERY_MAX17055      // Enables battery-measurement via external fuel gauge (MAX17055)
+    //#define SHUTDOWN_ON_BAT_CRITICAL      // Whether to turn off on critical battery-level (only used if MEASURE_BATTERY_XXX is active)
     //#define PLAY_LAST_RFID_AFTER_REBOOT   // When restarting ESPuino, the last RFID that was active before, is recalled and played
     //#define USE_LAST_VOLUME_AFTER_REBOOT  // Remembers the volume used at last shutdown after reboot
     #define USEROTARY_ENABLE                // If rotary-encoder is used (don't forget to review WAKEUP_BUTTON if you disable this feature!)
@@ -49,6 +50,7 @@
     //#define IR_CONTROL_ENABLE             // Enables remote control (https://forum.espuino.de/t/neues-feature-fernsteuerung-per-infrarot-fernbedienung/265)
     #define CACHED_PLAYLIST_ENABLE          // Enables playlist-caching (infos: https://forum.espuino.de/t/neues-feature-cached-playlist/515)
     //#define PAUSE_WHEN_RFID_REMOVED       // Playback starts when card is applied and pauses automatically, when card is removed (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
+    //#define DONT_ACCEPT_SAME_RFID_TWICE   // RFID-reader doesn't accept the same RFID-tag twice in a row (unless it's a modification-card or RFID-tag is unknown in NVS). Flag will be ignored silently if PAUSE_WHEN_RFID_REMOVED is active. (https://forum.espuino.de/t/neues-feature-dont-accept-same-rfid-twice/1247)
     //#define SAVE_PLAYPOS_BEFORE_SHUTDOWN  // When playback is active and mode audiobook was selected, last play-position is saved automatically when shutdown is initiated
     //#define SAVE_PLAYPOS_WHEN_RFID_CHANGE // When playback is active and mode audiobook was selected, last play-position is saved automatically for old playlist when new RFID-tag is applied
 
@@ -170,7 +172,10 @@
 
     // ESPuino will create a WiFi if joing existing WiFi was not possible. Name can be configured here.
     constexpr const char accessPointNetworkSSID[] PROGMEM = "ESPuino";     // Access-point's SSID
-    constexpr const char nameBluetoothDevice[] PROGMEM = "ESPuino";        // Name of your ESPuino as Bluetooth-device
+
+    // Bluetooth
+    constexpr const char nameBluetoothSinkDevice[] PROGMEM = "ESPuino";        // Name of your ESPuino as Bluetooth-device
+    constexpr const char nameBluetoothSourceDevice[] PROGMEM = "My POGS Wireless Headphone"; // Name of Bluetooth-device to connect to (BT-Headset name) (https://forum.espuino.de/t/neues-feature-bluetooth-kopfhoerer/1293/)
 
     // Where to store the backup-file for NVS-records
     constexpr const char backupFile[] PROGMEM = "/backup.txt"; // File is written every time a (new) RFID-assignment via GUI is done
@@ -184,7 +189,7 @@
         #define COLOR_ORDER                 GRB
     #endif
 
-    #if defined(MEASURE_BATTERY_VOLTAGE) || defined(MEASURE_BATTERY_OTHER) // placeholder
+    #if defined(MEASURE_BATTERY_VOLTAGE) || defined(MEASURE_BATTERY_MAX17055)
         #define BATTERY_MEASURE_ENABLE                 // Don't change. Set automatically if any method of battery monitoring is selected.
         constexpr uint8_t s_batteryCheckInterval = 10; // How often battery is measured (in minutes) (can be changed via GUI!)
     #endif
@@ -195,6 +200,23 @@
         constexpr float s_warningCriticalVoltage = 3.1;                 // If battery-voltage is <= this value, assume battery near-empty. Set to 0V to disable.
         constexpr float s_voltageIndicatorLow = 3.0;                    // Lower range for Neopixel-voltage-indication (0 leds) (can be changed via GUI!)
         constexpr float s_voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-voltage-indication (all leds) (can be changed via GUI!)
+    #endif
+
+    #ifdef MEASURE_BATTERY_MAX17055
+        constexpr float s_batteryLow = 15.0;            // low percentage
+        constexpr float s_batteryCritical = 5.0;        // critical percentage
+
+        constexpr uint16_t s_batteryCapacity = 6000;    // design cap of battery (mAh)
+        constexpr uint16_t s_emptyVoltage = 300;        // empty voltage in 10mV
+        constexpr uint16_t s_recoveryVoltage = 360;     // recovery voltage in 10mV
+        constexpr uint8_t  s_batteryChemistry = 0x60;   // 0 = Li-Ion, 0x20 = NCR, 0x60 = LiFePO4
+        constexpr float s_resistSensor = 0.01;          // current sense resistor, currently non-default values might lead to problems
+        constexpr bool s_vCharge = false;                   // true if charge voltage is greater than 4.275V
+    #endif
+
+    // enable I2C if necessary
+    #if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(PORT_EXPANDER_ENABLE) || defined(MEASURE_BATTERY_MAX17055)
+        #define I2C_2_ENABLE
     #endif
 
     // (optinal) Headphone-detection (leave unchanged if in doubts...)
@@ -216,6 +238,7 @@
         constexpr const char topicRfidState[] PROGMEM = "State/ESPuino/Rfid";
         constexpr const char topicTrackState[] PROGMEM = "State/ESPuino/Track";
         constexpr const char topicTrackControlCmnd[] PROGMEM = "Cmnd/ESPuino/TrackControl";
+        constexpr const char topicCoverChangedState[] PROGMEM = "State/ESPuino/CoverChanged";
         constexpr const char topicLoudnessCmnd[] PROGMEM = "Cmnd/ESPuino/Loudness";
         constexpr const char topicLoudnessState[] PROGMEM = "State/ESPuino/Loudness";
         constexpr const char topicSleepTimerCmnd[] PROGMEM = "Cmnd/ESPuino/SleepTimer";
@@ -255,7 +278,9 @@
     #elif (HAL == 8)
         #include "settings-azdelivery_sdmmc.h"              // Pre-configured settings for AZ Delivery ESP32 NodeMCU / Devkit C (https://forum.espuino.de/t/az-delivery-esp32-nodemcu-devkit-c-mit-sd-mmc-und-pn5180-als-rfid-leser/634)
     #elif (HAL == 9)
-        #include "settings-lolin_d32_sdmmc_pe.h"            // Pre-configured settings for ESPuino Lolin D32 pro with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
+        #include "settings-lolin_d32_sdmmc_pe.h"            // Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
+    #elif (HAL == 10)
+        #include "settings-muse_proto.h"                     // Pre-configured settings for Raspiaudio ESPMuse Proto Board with I2C RFID Reader (https://raspiaudio.com/produit/muse-proto)
     #elif (HAL == 99)
         #include "settings-custom.h"                        // Contains all user-relevant settings custom-board
     #endif

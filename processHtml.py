@@ -1,74 +1,141 @@
 # -*- coding: utf-8 -*-
-#!/usr/bin/python
-###
-# Use this script for creating PROGMEM header files from html files.
-# needs pip install requests
-##
-# html file base names
-import requests
-import argparse
 
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+"""
+Use this script for creating PROGMEM header files from html files.
+"""
 
-HTML_FILES = ["management_DE","management_EN", "accesspoint_DE", "accesspoint_EN"]
+from pathlib import Path
+import os
+import mimetypes
+import gzip
+Import("env")  # pylint: disable=undefined-variable
 
-class htmlHeaderProcessor(object):
+try:
+    from flask_minify.parsers import Parser
+except ImportError:
+  print("Trying to Install required module: flask_minify\nIf this failes, please execute \"pip install flask_minify\" manually.")
+  env.Execute("$PYTHONEXE -m pip install flask_minify")
 
-    """
-    Returns a minified HTML string, uses html-minifier.com api.
-    """
-    def minifyHTML(self, filename):
-        with open('html/' + filename + '.html', 'r') as r:
-            data = r.read()
-            return requests.post('https://html-minifier.com/raw', data=dict(input=data)).text.encode('utf8')
+from flask_minify.parsers import Parser
+import json
 
-    def escape_html(self, data):
-        data = data.replace('\n', '\\\n')
-        data = data.replace('\"', '\\"')
-        data = data.replace('\\d', '\\\d')
-        data = data.replace('\\.', '\\\.')
-        data = data.replace('\\^', '\\\\^')
-        data = data.replace('%;', '%%;')
+OUTPUT_DIR = (
+    Path(env.subst("$BUILD_DIR")) / "generated"
+)  # pylint: disable=undefined-variable
+HTML_DIR = Path("html").absolute()
+# List of files, which will only be minifed but not compressed (f.e. html files with templates)
+WWW_FILES = [
+    Path("management.html"),
+    Path("accesspoint.html"),
+]
+# list of all files, which shall be compressed before embedding
+# files with ".json" ending will be minifed before compression, ".js" will not be changed!
+BINARY_FILES =[
+    Path("js/i18next.min.js"),
+    Path("js/i18nextHttpBackend.min.js"),
+    Path("js/loc_i18next.min.js"),
+    Path("locales/de.json"),
+    Path("locales/en.json")
+]
+
+
+class HtmlHeaderProcessor:
+    """Create c code PROGMEM header files from HTML files"""
+
+    @staticmethod
+    def _escape_html(data):
+        """Escape HTML characters for usage in C"""
+        data = data.replace("\n", "\\n")
+        data = data.replace('"', r"\"")
+        data = data.replace(r"\d", r"\\d")
+        data = data.replace(r"\.", r"\\.")
+        data = data.replace(r"\^", r"\\^")
+        data = data.replace("%;", "%%;")
         return data
 
-    def html_to_c_header(self, filename):
-        content = ""
-        with open('html/' + filename + '.html', 'r') as r:
-            data = r.read()
-            content += self.escape_html(data)
-        return content
+    @classmethod
+    def _process_header_file(cls, html_path, header_path):
+        parser = Parser({}, True)
+        parser.update_runtime_options(True, True, True)
+        with html_path.open(mode="r", encoding="utf-8") as html_file:
+            content = html_file.read()
+            content = parser.minify(content, "html")    # minify content as html
+            content = cls._escape_html(content)
+
+        with header_path.open(mode="w", encoding="utf-8") as header_file:
+            header_file.write(
+                f"static const char {html_path.name.split('.')[0]}_HTML[] PROGMEM = \""
+            )
+            header_file.write(content)
+            header_file.write('";\n')
+        header_file.close()
+
+    @classmethod
+    def _process_binary_file(cls, binary_path, header_path, info):
+        # minify json files explicitly
+        if binary_path.suffix == "json":
+            with binary_path.open(mode="r", encoding="utf-8") as f:
+                jsonObj = json.load(f)
+                content = json.dumps(jsonObj, separators=(',', ':'))
+        # use everything else as is
+        else:
+            with binary_path.open(mode="r", encoding="utf-8") as f:
+                content = f.read()
+
+        # compress content
+        data = gzip.compress(content.encode())
+
+        with header_path.open(mode="a", encoding="utf-8") as header_file:
+            varName = binary_path.name.split('.')[0]
+            header_file.write(
+                f"static const uint8_t {varName}_BIN[] PROGMEM = {{\n    "
+            )
+            size = 0
+            for d in data:
+                # write out the compressed byte stream as a hex array and create a newline after every 20th entry
+                header_file.write("0x{:02X},".format(d))
+                size = size + 1
+                if not (size % 20):
+                    header_file.write("\n    ")
+            header_file.write("\n};\n\n")
+            # populate dict with our information
+            info["size"] = size
+            info["variable"] = f"{varName}_BIN"
+            return info
+
+    @classmethod
+    def process(cls):
+        print("GENERATING HTML HEADER FILES")
+        for html_file in WWW_FILES:
+            header_file = f"HTML{html_file.stem}.h"
+            print(f"  {HTML_DIR / html_file} -> {OUTPUT_DIR / header_file}")
+            cls._process_header_file(HTML_DIR / html_file, OUTPUT_DIR / header_file)
+        binary_header = OUTPUT_DIR / "HTMLbinary.h"
+        if binary_header.exists():
+            os.remove(binary_header)    # remove file if it exists, since we are appending to it
+
+        fileList = []   # dict holding the array of metadata for all processed binary files
+        for binary_file in BINARY_FILES:
+            filePath = HTML_DIR / binary_file
+            print(f"  {filePath} -> {binary_header}")
+
+            info = dict()   # the dict entry for this file
+            info["uri"] = "/" + filePath.relative_to(HTML_DIR).as_posix()
+            info["mimeType"] = mimetypes.types_map[filePath.suffix]
+            info = cls._process_binary_file(HTML_DIR / binary_file, binary_header, info)
+            fileList.append(info)
+
+        with binary_header.open(mode="a", encoding="utf-8") as f:
+            f.write("""using RouteRegistrationHandler = std::function<void(const String& uri, const String& contentType, const uint8_t * content, size_t len)>;
+
+class WWWData {
+    public:
+        static void registerRoutes(RouteRegistrationHandler handler) {
+""")
+            for info in fileList:
+                # write the fileList entries to the binary file. These will be the paramenter with which the handler is called to register the endpoint on the webserver
+                f.write(f'            handler("{info["uri"]}", "{info["mimeType"]}", {info["variable"]}, {info["size"]});\n')
+            f.write("        }\n};\n")
 
 
-    def write_header_file(self, filename, content):
-        with open('src/HTML' + filename + '.h', 'w') as w:
-            varname = filename.split('_')[0]
-            w.write("static const char " + varname + "_HTML[] PROGMEM = \"")
-            w.write(content)
-            w.write("\";")
-
-    def main(self):
-        parser = argparse.ArgumentParser(description='Create c code PROGMEM header files from HTML files.')
-        parser.add_argument("--minify", type=str2bool, nargs='?',
-                            const=True, default=False,
-                            help="Minify HTML Code")
-        args = parser.parse_args()
-
-        for file in HTML_FILES:
-            if args.minify:
-
-                self.header_file_content = self.minifyHTML(file)
-                self.header_file_content = self.escape_html(self.header_file_content)
-            else:
-                self.header_file_content = self.html_to_c_header(file)
-            self.write_header_file(file, self.header_file_content)
-
-if __name__ == '__main__':
-    htmlHeaderProcessor().main()
+HtmlHeaderProcessor().process()

@@ -64,11 +64,13 @@
 
     // Control-buttons (set to 99 to DISABLE; 0->39 for GPIO; 100->115 for port-expander)
     #define NEXT_BUTTON                     13          // Button 0: GPIO to detect next
-    #define PREVIOUS_BUTTON                 39          // Button 1: GPIO to detect previous
+    #define PREVIOUS_BUTTON                 36          // Button 1: GPIO to detect previous
     #define PAUSEPLAY_BUTTON                 5          // Button 2: GPIO to detect pause/play
     #define ROTARYENCODER_BUTTON            32          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
     #define BUTTON_4                        99          // Button 4: unnamed optional button
     #define BUTTON_5                        99          // Button 5: unnamed optional button
+
+    //#define BUTTONS_LED                   114         // Powers the LEDs of the buttons. Make sure the current consumed by the LEDs can be handled by the used GPIO
 
     // Channels of port-expander can be read cyclic or interrupt-driven. It's strongly recommended to use the interrupt-way!
     // Infos: https://forum.espuino.de/t/einsatz-des-port-expanders-pca9555/306
@@ -105,6 +107,11 @@
         #define VOLTAGE_READ_PIN            99          // GPIO used to monitor battery-voltage.
         constexpr float referenceVoltage = 3.3;         // Voltage between 3.3V and GND-pin in battery-mode (disconnect USB!)
         constexpr float offsetVoltage = 0.0;            // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
+    #endif
+
+    // (optional) hallsensor. Make sure the GPIO defined doesn't overlap with existing configuration. Please note: only user-support is provided for this feature.
+    #ifdef HALLEFFECT_SENSOR_ENABLE
+	#define HallEffectSensor_PIN        34  	// GPIO that is used for hallsensor (ADC); user-support: https://forum.espuino.de/t/magnetische-hockey-tags/1449/35
     #endif
 
     // (Optional) remote control via infrared
