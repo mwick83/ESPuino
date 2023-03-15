@@ -44,9 +44,9 @@
 
     // Rotary encoder
     #ifdef USEROTARY_ENABLE
-        #define ROTARYENCODER_CLK           34          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
+        //#define REVERSE_ROTARY                        // To reverse encoder's direction; switching CLK / DT in hardware does the same
+        #define ROTARYENCODER_CLK           34          // rotary encoder's CLK
         #define ROTARYENCODER_DT            36          // 39 = 'VN'; Info: Lolin D32 pro is using 35 for battery-voltage-monitoring!
-        #define ROTARYENCODER_BUTTON        12          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
     #endif
 
     // Amp enable (optional)
@@ -57,8 +57,11 @@
     #define NEXT_BUTTON                      0          // Button 0: GPIO to detect next
     #define PREVIOUS_BUTTON                 13          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
     #define PAUSEPLAY_BUTTON                32          // Button 2: GPIO to detect pause/play
+    #define ROTARYENCODER_BUTTON            12          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
     #define BUTTON_4                        99          // Button 4: unnamed optional button
     #define BUTTON_5                        99          // Button 5: unnamed optional button
+
+    //#define BUTTONS_LED                   114         // Powers the LEDs of the buttons. Make sure the current consumed by the LEDs can be handled by the used GPIO
 
     // Channels of port-expander can be read cyclic or interrupt-driven. It's strongly recommended to use the interrupt-way!
     // Infos: https://forum.espuino.de/t/einsatz-des-port-expanders-pca9555/306
@@ -67,7 +70,7 @@
     #endif
 
     // I2C-configuration (necessary for RC522 [only via i2c - not spi!] or port-expander)
-    #if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(PORT_EXPANDER_ENABLE)
+    #ifdef I2C_2_ENABLE
         #define ext_IIC_CLK                 5           // i2c-SCL (clock)
         #define ext_IIC_DATA                2           // i2c-SDA (data)
     #endif
@@ -79,6 +82,9 @@
 
     // (optional) Power-control
     #define POWER                           5           // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep
+    #ifdef POWER
+        //#define INVERT_POWER                          // If enabled, use inverted logic for POWER circuit, that means peripherals are turned off by writing HIGH
+    #endif
 
     // (optional) Neopixel
     #define LED_PIN                         21          // GPIO for Neopixel-signaling
@@ -100,6 +106,11 @@
     #ifdef MEASURE_BATTERY_VOLTAGE
         constexpr uint8_t rdiv1 = 130;                               // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
         constexpr uint16_t rdiv2 = 130;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
+    #endif
+
+    // (optional) hallsensor. Make sure the GPIO defined doesn't overlap with existing configuration. Please note: only user-support is provided for this feature.
+    #ifdef HALLEFFECT_SENSOR_ENABLE
+        #define HallEffectSensor_PIN        34  	// GPIO that is used for hallsensor (ADC); user-support: https://forum.espuino.de/t/magnetische-hockey-tags/1449/35
     #endif
 
     // (Optional) remote control via infrared
