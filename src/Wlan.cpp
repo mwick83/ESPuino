@@ -165,6 +165,12 @@ void Wlan_Cyclic(void) {
 			Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
 		}
 	}
+
+	// check if the WiFi connection has been dropped unexpectetly and initiate a restart
+	if (!wifiConnectionTryInProgress && !accessPointStarted && 
+	   (wifiConnectIteration == 0) && !Wlan_IsConnected()) {
+		wifiNeedsRestart = true;
+	}
 }
 
 bool Wlan_ConnectionTryInProgress(void) {
