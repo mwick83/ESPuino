@@ -76,7 +76,7 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 		xTaskCreatePinnedToCore(
 			Rfid_Task,              /* Function to implement the task */
 			"rfid",                 /* Name of the task */
-			2048,                   /* Stack size in words */
+			4096,                   /* Stack size in words */
 			NULL,                   /* Task input parameter */
 			2 | portPRIVILEGE_BIT,  /* Priority of the task */
 			&rfidTaskHandle,        /* Task handle. */
